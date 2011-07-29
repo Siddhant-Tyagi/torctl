@@ -202,15 +202,21 @@ class BuildTimeoutSetEvent(Event):
     self.cutoff_quantile = quantile
 
 class CircuitEvent(Event):
-  def __init__(self, event_name, circ_id, status, path, purpose,
-         reason, remote_reason, body):
-    Event.__init__(self, event_name, body)
-    self.circ_id = circ_id
-    self.status = status
-    self.path = path
-    self.purpose = purpose
-    self.reason = reason
-    self.remote_reason = remote_reason
+  _POSITIONAL_ARGS = ("circ_id", "status", "path")
+  _KEYWORD_ARGS = {
+    "BUILD_FLAGS": "build_flags",
+    "PURPOSE": "purpose",
+    "REASON": "reason",
+    "REMOTE_REASON": "remote_reason"
+  }
+
+  def __init__(self, event_name, body, positional_args, kw_args):
+    Event.__init__(self, event_name, body, positional_args, kw_args)
+    self.circ_id = int(self.circ_id)
+
+    if self.path:
+      self.path = [p.replace("~", "=").split("=")[0] for p in self.path.split(",")]
+    else: self.path = []
 
 class StreamEvent(Event):
   _POSITIONAL_ARGS = ("strm_id", "status", "circ_id", "target")
@@ -1396,43 +1402,11 @@ class EventHandler(EventSink):
     else:
       evtype,body = body,""
     evtype = evtype.upper()
+    positional_args, kw_args = self._decodeFields(body)
+
     if evtype == "CIRC":
-      m = re.match(r"(\d+)\s+(\S+)(\s\S+)?(\s\S+)?(\s\S+)?(\s\S+)?", body)
-      if not m:
-        raise ProtocolError("CIRC event misformatted.")
-      ident,status,path,purpose,reason,remote = m.groups()
-      ident = int(ident)
-      if path:
-        if "PURPOSE=" in path:
-          remote = reason
-          reason = purpose
-          purpose=path
-          path=[]
-        elif "REASON=" in path:
-          remote = reason
-          reason = path
-          purpose = ""
-          path=[]
-        else:
-          path_verb = path.strip().split(",")
-          path = []
-          for p in path_verb:
-            path.append(p.replace("~", "=").split("=")[0])
-      else:
-        path = []
-
-      if purpose and "REASON=" in purpose:
-        remote=reason
-        reason=purpose
-        purpose=""
-
-      if purpose: purpose = purpose[9:]
-      if reason: reason = reason[8:]
-      if remote: remote = remote[15:]
-      event = CircuitEvent(evtype, ident, status, path, purpose, reason,
-                           remote, body)
+      event = CircuitEvent(evtype, body, positional_args, kw_args)
     elif evtype == "STREAM":
-      positional_args, kw_args = self._decodeFields(body)
       event = StreamEvent(evtype, body, positional_args, kw_args)
     elif evtype == "ORCONN":
       m = re.match(r"(\S+)\s+(\S+)(\sAGE=\S+)?(\sREAD=\S+)?(\sWRITTEN=\S+)?(\sREASON=\S+)?(\sNCIRCS=\S+)?", body)
