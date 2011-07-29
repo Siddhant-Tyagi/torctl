@@ -96,6 +96,11 @@ AUTH_TYPE = Enum2(
 
 INCORRECT_PASSWORD_MSG = "Provided passphrase was incorrect"
 
+# Matches keyword=value arguments. This can't be a simple "(.*)=(.*)" pattern
+# because some positional arguments, like circuit paths, can have an equal
+# sign.
+
+KW_ARG = re.compile("([A-Za-z0-9_]+)=(.*)")
 
 class TorCtlError(Exception):
   "Generic error raised by TorControl code."
@@ -134,11 +139,27 @@ class NetworkStatus:
     self.updated = datetime.datetime(*map(int, m.groups()))
 
 class Event:
-  def __init__(self, event_name, body=None):
+  _POSITIONAL_ARGS = ()
+  _KEYWORD_ARGS = {}
+
+  def __init__(self, event_name, body=None, positional_args=(), kw_args={}):
     self.body = body
     self.event_name = event_name
     self.arrived_at = 0
     self.state = EVENT_STATE.PRISTINE
+    self.kw_args = dict(kw_args)
+
+    # populates our attributes with positional and keyword variables
+    for i in range(len(self._POSITIONAL_ARGS)):
+      if i < len(positional_args):
+        attr_value = positional_args[i]
+      else: attr_value = None
+
+      attr_name = self._POSITIONAL_ARGS[i]
+      setattr(self, attr_name, attr_value)
+
+    for controller_attr_name, attr_name in self._KEYWORD_ARGS.items():
+      setattr(self, attr_name, kw_args.get(controller_attr_name))
 
 class TimerEvent(Event):
   def __init__(self, event_name, body):
@@ -192,20 +213,26 @@ class CircuitEvent(Event):
     self.remote_reason = remote_reason
 
 class StreamEvent(Event):
-  def __init__(self, event_name, strm_id, status, circ_id, target_host,
-         target_port, reason, remote_reason, source, source_addr, purpose,
-         body):
-    Event.__init__(self, event_name, body)
-    self.strm_id = strm_id
-    self.status = status
-    self.circ_id = circ_id
-    self.target_host = target_host
-    self.target_port = int(target_port)
-    self.reason = reason
-    self.remote_reason = remote_reason
-    self.source = source
-    self.source_addr = source_addr
-    self.purpose = purpose
+  _POSITIONAL_ARGS = ("strm_id", "status", "circ_id", "target")
+  _KEYWORD_ARGS = {
+    "REASON": "reason",
+    "REMOTE_REASON": "remote_reason",
+    "SOURCE": "source",
+    "SOURCE_ADDR": "source_addr",
+    "PURPOSE": "purpose"
+  }
+
+  def __init__(self, event_name, body, positional_args, kw_args):
+    Event.__init__(self, event_name, body, positional_args, kw_args)
+    self.strm_id = int(self.strm_id)
+    self.circ_id = int(self.circ_id)
+
+    if self.target:
+      self.target_host, self.target_port = self.target.split(":")
+      self.target_port = int(self.target_port)
+    else:
+      # this can happen on SOCKS_PROTOCOL failures
+      self.target_host = "(none)"
 
 class ORConnEvent(Event):
   def __init__(self, event_name, status, endpoint, age, read_bytes,
@@ -375,7 +402,7 @@ class Router:
     if ns_bandwidth != None:
       self.bw = ns_bandwidth
     else:
-     self.bw = bw
+      self.bw = bw
     self.desc_bw = bw
     self.exitpolicy = exitpolicy
     self.flags = flags # Technicaly from NS doc
@@ -712,7 +739,7 @@ class Connection:
         self._handleFn(timestamp, reply)
       except:
         for code, msg, data in reply:
-            plog("WARN", "No event for: "+str(code)+" "+str(msg))
+          plog("WARN", "No event for: "+str(code)+" "+str(msg))
         self._err(sys.exc_info(), 1)
         return
 
@@ -1326,7 +1353,11 @@ class EventHandler(EventSink):
   def _handle1(self, timestamp, lines):
     """Dispatcher: called from Connection when an event is received."""
     for code, msg, data in lines:
-      event = self._decode1(msg, data)
+      try:
+        event = self._decode1(msg, data)
+      except ValueError:
+        raise ProtocolError("Unable to decode event %s" % msg)
+
       event.arrived_at = timestamp
       event.state=EVENT_STATE.PRELISTEN
       for l in self.pre_listeners:
@@ -1338,6 +1369,25 @@ class EventHandler(EventSink):
       event.state=EVENT_STATE.POSTLISTEN
       for l in self.post_listeners:
         l.listen(event)
+
+  def _decodeFields(self, body):
+    """Given a common-case event body with a number of space-separated
+       positional arguments and a number of keyword=value arguents,
+       return a sequence and a dict containing the two types of
+       arguments respectively."""
+
+    positional, keywords = [], {}
+
+    for entry in body.split():
+      m = KW_ARG.match(entry)
+
+      if m:
+        k, v = m.groups()
+        keywords[k] = v
+      else:
+        positional.append(entry)
+
+    return positional, keywords
 
   def _decode1(self, body, data):
     """Unpack an event message into a type/arguments-tuple tuple."""
@@ -1382,24 +1432,8 @@ class EventHandler(EventSink):
       event = CircuitEvent(evtype, ident, status, path, purpose, reason,
                            remote, body)
     elif evtype == "STREAM":
-      #plog("DEBUG", "STREAM: "+body)
-      m = re.match(r"(\S+)\s+(\S+)\s+(\S+)\s+(\S+)?:(\d+)(\sREASON=\S+)?(\sREMOTE_REASON=\S+)?(\sSOURCE=\S+)?(\sSOURCE_ADDR=\S+)?(\s+PURPOSE=\S+)?", body)
-      if not m:
-        raise ProtocolError("STREAM event misformatted.")
-      ident,status,circ,target_host,target_port,reason,remote,source,source_addr,purpose = m.groups()
-      ident,circ = map(int, (ident,circ))
-      if not target_host: # This can happen on SOCKS_PROTOCOL failures
-        target_host = "(none)"
-      if reason: reason = reason[8:]
-      if remote: remote = remote[15:]
-      if source: source = source[8:]
-      if source_addr: source_addr = source_addr[13:]
-      if purpose:
-        purpose = purpose.lstrip()
-        purpose = purpose[8:]
-      event = StreamEvent(evtype, ident, status, circ, target_host,
-               int(target_port), reason, remote, source, source_addr,
-               purpose, body)
+      positional_args, kw_args = self._decodeFields(body)
+      event = StreamEvent(evtype, body, positional_args, kw_args)
     elif evtype == "ORCONN":
       m = re.match(r"(\S+)\s+(\S+)(\sAGE=\S+)?(\sREAD=\S+)?(\sWRITTEN=\S+)?(\sREASON=\S+)?(\sNCIRCS=\S+)?", body)
       if not m:
