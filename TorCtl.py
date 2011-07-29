@@ -241,16 +241,29 @@ class StreamEvent(Event):
       self.target_host = "(none)"
 
 class ORConnEvent(Event):
-  def __init__(self, event_name, status, endpoint, age, read_bytes,
-         wrote_bytes, reason, ncircs, body):
-    Event.__init__(self, event_name, body)
-    self.status = status
-    self.endpoint = endpoint
-    self.age = age
-    self.read_bytes = read_bytes
-    self.wrote_bytes = wrote_bytes
-    self.reason = reason
-    self.ncircs = ncircs
+  _POSITIONAL_ARGS = ("endpoint", "status")
+  _KEYWORD_ARGS = {
+    "AGE": "age",
+    "READ": "read_bytes",
+    "WRITTEN": "wrote_bytes",
+    "REASON": "reason",
+    "NCIRCS": "ncircs"
+  }
+
+  def __init__(self, event_name, body, positional_args, kw_args):
+    Event.__init__(self, event_name, body, positional_args, kw_args)
+
+    if self.age: self.age = int(self.age)
+    else: self.age = 0
+
+    if self.read_bytes: self.read_bytes = int(self.read_bytes)
+    else: self.read_bytes = 0
+
+    if self.wrote_bytes: self.wrote_bytes = int(self.wrote_bytes)
+    else: self.wrote_bytes = 0
+
+    if self.ncircs: self.ncircs = int(self.ncircs)
+    else: self.ncircs = 0
 
 class StreamBwEvent(Event):
   def __init__(self, event_name, saved_body, strm_id, written, read):
@@ -1409,23 +1422,7 @@ class EventHandler(EventSink):
     elif evtype == "STREAM":
       event = StreamEvent(evtype, body, positional_args, kw_args)
     elif evtype == "ORCONN":
-      m = re.match(r"(\S+)\s+(\S+)(\sAGE=\S+)?(\sREAD=\S+)?(\sWRITTEN=\S+)?(\sREASON=\S+)?(\sNCIRCS=\S+)?", body)
-      if not m:
-        raise ProtocolError("ORCONN event misformatted.")
-      target, status, age, read, wrote, reason, ncircs = m.groups()
-
-      #plog("DEBUG", "ORCONN: "+body)
-      if ncircs: ncircs = int(ncircs[8:])
-      else: ncircs = 0
-      if reason: reason = reason[8:]
-      if age: age = int(age[5:])
-      else: age = 0
-      if read: read = int(read[6:])
-      else: read = 0
-      if wrote: wrote = int(wrote[9:])
-      else: wrote = 0
-      event = ORConnEvent(evtype, status, target, age, read, wrote,
-                reason, ncircs, body)
+      event = ORConnEvent(evtype, body, positional_args, kw_args)
     elif evtype == "STREAM_BW":
       m = re.match(r"(\d+)\s+(\d+)\s+(\d+)", body)
       if not m:
