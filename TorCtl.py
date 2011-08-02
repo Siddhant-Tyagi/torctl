@@ -282,11 +282,33 @@ class LogEvent(Event):
     self.msg = body
 
 class AddrMapEvent(Event):
-  def __init__(self, event_name, from_addr, to_addr, when, body):
-    Event.__init__(self, event_name, body)
-    self.from_addr = from_addr
-    self.to_addr = to_addr
-    self.when = when
+  def __init__(self, event_name, body, positional_args, kw_args):
+    Event.__init__(self, event_name, body, positional_args, kw_args)
+
+    # this type of event is a pita to parse because it both contains quoted
+    # and non-quoted values, so falling back to regex rather than positional/kw
+    # parsing
+
+    m = re.match(".*EXPIRES=\"(.*)\"$", body)
+
+    if m:
+      # ends with a gmt_expiry field
+      self.gmt_expiry = time.strptime(m.groups()[0], "%Y-%m-%d %H:%M:%S")
+      body = body[:body.rfind("EXPIRES=") - 1]
+    else: self.gmt_expiry = None
+
+    m = re.match(r'(\S+)\s+(\S+)\s+(\"[^"]+\")(\s+\"[^"]+\")?', body)
+    if not m: raise ProtocolError("ADDRMAP event misformatted.")
+
+    self.from_addr, self.to_addr, self.when, self.error = m.groups()
+
+    if self.when.upper() == "NEVER":
+      self.when = None
+    else:
+      self.when = time.strptime(self.when[1:-1], "%Y-%m-%d %H:%M:%S")
+
+    if self.error:
+      self.error = self.error.strip()
 
 class AddrMap:
   def __init__(self, from_addr, to_addr, when):
@@ -1438,16 +1460,7 @@ class EventHandler(EventSink):
     elif evtype == "NEWDESC":
       event = NewDescEvent(evtype, body, positional_args, kw_args)
     elif evtype == "ADDRMAP":
-      # TODO: Also parse errors and GMTExpiry
-      m = re.match(r'(\S+)\s+(\S+)\s+(\"[^"]+\"|\w+)', body)
-      if not m:
-        raise ProtocolError("ADDRMAP event misformatted.")
-      fromaddr, toaddr, when = m.groups()
-      if when.upper() == "NEVER":  
-        when = None
-      else:
-        when = time.strptime(when[1:-1], "%Y-%m-%d %H:%M:%S")
-      event = AddrMapEvent(evtype, fromaddr, toaddr, when, body)
+      event = AddrMapEvent(evtype, body, positional_args, kw_args)
     elif evtype == "NS":
       event = NetworkStatusEvent(evtype, parse_ns_body(data), data)
     elif evtype == "NEWCONSENSUS":
