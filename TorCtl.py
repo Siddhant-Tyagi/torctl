@@ -292,10 +292,13 @@ class AddrMap:
     self.when = when
 
 class BWEvent(Event):
-  def __init__(self, event_name, read, written, body):
-    Event.__init__(self, event_name, body)
-    self.read = read
-    self.written = written
+  _POSITIONAL_ARGS = ("read", "written")
+
+  def __init__(self, event_name, body, positional_args, kw_args):
+    Event.__init__(self, event_name, body, positional_args, kw_args)
+
+    self.read = long(self.read)
+    self.written = long(self.written)
 
 class UnknownEvent(Event):
   def __init__(self, event_name, event_string):
@@ -1426,11 +1429,7 @@ class EventHandler(EventSink):
     elif evtype == "STREAM_BW":
       event = StreamBwEvent(evtype, body, positional_args, kw_args)
     elif evtype == "BW":
-      m = re.match(r"(\d+)\s+(\d+)", body)
-      if not m:
-        raise ProtocolError("BANDWIDTH event misformatted.")
-      read, written = map(long, m.groups())
-      event = BWEvent(evtype, read, written, body)
+      event = BWEvent(evtype, body, positional_args, kw_args)
     elif evtype in ("DEBUG", "INFO", "NOTICE", "WARN", "ERR"):
       event = LogEvent(evtype, body)
     elif evtype == "NEWDESC":
