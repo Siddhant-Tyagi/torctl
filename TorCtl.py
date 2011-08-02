@@ -263,11 +263,14 @@ class ORConnEvent(Event):
     self.wrote_bytes = 0
 
 class StreamBwEvent(Event):
-  def __init__(self, event_name, saved_body, strm_id, written, read):
-    Event.__init__(self, event_name, saved_body)
-    self.strm_id = int(strm_id)
-    self.bytes_read = int(read)
-    self.bytes_written = int(written)
+  _POSITIONAL_ARGS = ("strm_id", "bytes_read", "bytes_written")
+
+  def __init__(self, event_name, body, positional_args, kw_args):
+    Event.__init__(self, event_name, body, positional_args, kw_args)
+
+    self.strm_id = int(self.strm_id)
+    self.bytes_read = int(self.bytes_read)
+    self.bytes_written = int(self.bytes_written)
 
 class LogEvent(Event):
   def __init__(self, level, msg):
@@ -1421,10 +1424,7 @@ class EventHandler(EventSink):
     elif evtype == "ORCONN":
       event = ORConnEvent(evtype, body, positional_args, kw_args)
     elif evtype == "STREAM_BW":
-      m = re.match(r"(\d+)\s+(\d+)\s+(\d+)", body)
-      if not m:
-        raise ProtocolError("STREAM_BW event misformatted.")
-      event = StreamBwEvent(evtype, body, *m.groups())
+      event = StreamBwEvent(evtype, body, positional_args, kw_args)
     elif evtype == "BW":
       m = re.match(r"(\d+)\s+(\d+)", body)
       if not m:
