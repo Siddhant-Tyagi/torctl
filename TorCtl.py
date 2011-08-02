@@ -175,9 +175,12 @@ class NewConsensusEvent(NetworkStatusEvent):
   pass
 
 class NewDescEvent(Event):
-  def __init__(self, event_name, idlist, body):
-    Event.__init__(self, event_name, body)
-    self.idlist = idlist
+  def __init__(self, event_name, body, positional_args, kw_args):
+    Event.__init__(self, event_name, body, positional_args, kw_args)
+
+    if body:
+      self.idlist = [p.replace("~", "=").split("=")[0].replace("$","") for p in body.split(" ")]
+    else: self.idlist = []
 
 class GuardEvent(Event):
   def __init__(self, event_name, ev_type, guard, status, body):
@@ -1433,11 +1436,7 @@ class EventHandler(EventSink):
     elif evtype in ("DEBUG", "INFO", "NOTICE", "WARN", "ERR"):
       event = LogEvent(evtype, body, positional_args, kw_args)
     elif evtype == "NEWDESC":
-      ids_verb = body.split(" ")
-      ids = []
-      for i in ids_verb:
-        ids.append(i.replace("~", "=").split("=")[0].replace("$",""))
-      event = NewDescEvent(evtype, ids, body)
+      event = NewDescEvent(evtype, body, positional_args, kw_args)
     elif evtype == "ADDRMAP":
       # TODO: Also parse errors and GMTExpiry
       m = re.match(r'(\S+)\s+(\S+)\s+(\"[^"]+\"|\w+)', body)
