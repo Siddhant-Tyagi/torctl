@@ -233,12 +233,13 @@ class StreamEvent(Event):
     self.strm_id = int(self.strm_id)
     self.circ_id = int(self.circ_id)
 
-    if self.target:
+    if ":" in self.target:
       self.target_host, self.target_port = self.target.split(":")
       self.target_port = int(self.target_port)
     else:
       # this can happen on SOCKS_PROTOCOL failures
       self.target_host = "(none)"
+      self.target_port = int(self.target)
 
 class ORConnEvent(Event):
   _POSITIONAL_ARGS = ("endpoint", "status")
