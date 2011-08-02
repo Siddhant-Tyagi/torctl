@@ -273,10 +273,10 @@ class StreamBwEvent(Event):
     self.bytes_written = int(self.bytes_written)
 
 class LogEvent(Event):
-  def __init__(self, level, msg):
-    Event.__init__(self, level, msg)
-    self.level = level
-    self.msg = msg
+  def __init__(self, event_name, body, positional_args, kw_args):
+    Event.__init__(self, event_name, body, positional_args, kw_args)
+    self.level = event_name
+    self.msg = body
 
 class AddrMapEvent(Event):
   def __init__(self, event_name, from_addr, to_addr, when, body):
@@ -1431,7 +1431,7 @@ class EventHandler(EventSink):
     elif evtype == "BW":
       event = BWEvent(evtype, body, positional_args, kw_args)
     elif evtype in ("DEBUG", "INFO", "NOTICE", "WARN", "ERR"):
-      event = LogEvent(evtype, body)
+      event = LogEvent(evtype, body, positional_args, kw_args)
     elif evtype == "NEWDESC":
       ids_verb = body.split(" ")
       ids = []
