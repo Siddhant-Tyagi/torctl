@@ -243,9 +243,6 @@ class StreamEvent(Event):
 class ORConnEvent(Event):
   _POSITIONAL_ARGS = ("endpoint", "status")
   _KEYWORD_ARGS = {
-    "AGE": "age",
-    "READ": "read_bytes",
-    "WRITTEN": "wrote_bytes",
     "REASON": "reason",
     "NCIRCS": "ncircs"
   }
@@ -253,17 +250,16 @@ class ORConnEvent(Event):
   def __init__(self, event_name, body, positional_args, kw_args):
     Event.__init__(self, event_name, body, positional_args, kw_args)
 
-    if self.age: self.age = int(self.age)
-    else: self.age = 0
-
-    if self.read_bytes: self.read_bytes = int(self.read_bytes)
-    else: self.read_bytes = 0
-
-    if self.wrote_bytes: self.wrote_bytes = int(self.wrote_bytes)
-    else: self.wrote_bytes = 0
-
     if self.ncircs: self.ncircs = int(self.ncircs)
     else: self.ncircs = 0
+
+    # The following were previously fetched from the ORCONN events, but this
+    # was a bug (they don't exist in tor) so they were always zero. However,
+    # removing them will break clients that expect these variables to exist.
+
+    self.age = 0
+    self.read_bytes = 0
+    self.wrote_bytes = 0
 
 class StreamBwEvent(Event):
   def __init__(self, event_name, saved_body, strm_id, written, read):
