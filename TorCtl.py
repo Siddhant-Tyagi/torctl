@@ -183,15 +183,17 @@ class NewDescEvent(Event):
     else: self.idlist = []
 
 class GuardEvent(Event):
-  def __init__(self, event_name, ev_type, guard, status, body):
-    Event.__init__(self, event_name, body)
-    if "~" in guard:
-      (self.idhex, self.nick) = guard[1:].split("~")
-    elif "=" in guard:
-      (self.idhex, self.nick) = guard[1:].split("=")
+  _POSITIONAL_ARGS = ("ev_type", "guard", "status")
+
+  def __init__(self, event_name, body, positional_args, kw_args):
+    Event.__init__(self, event_name, body, positional_args, kw_args)
+
+    if "~" in self.guard:
+      self.idhex, self.nick = self.guard[1:].split("~")
+    elif "=" in self.guard:
+      self.idhex, self.nick = self.guard[1:].split("=")
     else:
-      self.idhex = guard[1:]
-    self.status = status
+      self.idhex, self.nick = guard[1:], ""
 
 class BuildTimeoutSetEvent(Event):
   _POSITIONAL_ARGS = ("set_type")
@@ -1488,9 +1490,7 @@ class EventHandler(EventSink):
     elif evtype == "BUILDTIMEOUT_SET":
       event = BuildTimeoutSetEvent(evtype, parse_ns_body(data), data)
     elif evtype == "GUARD":
-      m = re.match(r"(\S+)\s(\S+)\s(\S+)", body)
-      entry, guard, status = m.groups()
-      event = GuardEvent(evtype, entry, guard, status, body)
+      event = GuardEvent(evtype, body, positional_args, kw_args)
     elif evtype == "TORCTL_TIMER":
       event = TimerEvent(evtype, data)
     else:
