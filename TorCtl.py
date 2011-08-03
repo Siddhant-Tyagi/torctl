@@ -194,15 +194,35 @@ class GuardEvent(Event):
     self.status = status
 
 class BuildTimeoutSetEvent(Event):
-  def __init__(self, event_name, set_type, total_times, timeout_ms, xm, alpha,
-               quantile, body):
-    Event.__init__(self, event_name, body)
-    self.set_type = set_type
-    self.total_times = total_times
-    self.timeout_ms = timeout_ms
-    self.xm = xm
-    self.alpha = alpha
-    self.cutoff_quantile = quantile
+  _POSITIONAL_ARGS = ("set_type")
+  _KEYWORD_ARGS = {
+    "TOTAL_TIMES": "total_times",
+    "TIMEOUT_MS": "timeout_ms",
+    "XM": "xm",
+    "ALPHA": "alpha",
+    "CUTOFF_QUANTILE": "cutoff_quantile",
+    "TIMEOUT_RATE": "timeout_rate",
+    "CLOSE_MS": "close_ms",
+    "CLOSE_RATE": "close_rate"
+  }
+
+  def __init__(self, event_name, body, positional_args, kw_args):
+    Event.__init__(self, event_name, body, positional_args, kw_args)
+
+    self.total_times = int(self.total_times)
+    self.timeout_ms = int(self.timeout_ms)
+    self.xm = int(self.xm)
+    self.alpha = float(self.alpha)
+    self.cutoff_quantile = float(self.cutoff_quantile)
+
+    if self.timeout_rate:
+      self.timeout_rate = int(self.timeout_rate)
+
+    if self.close_ms:
+      self.close_ms = int(self.close_ms)
+
+    if self.close_rate:
+      self.close_rate = int(self.close_rate)
 
 class CircuitEvent(Event):
   _POSITIONAL_ARGS = ("circ_id", "status", "path")
@@ -1466,13 +1486,7 @@ class EventHandler(EventSink):
     elif evtype == "NEWCONSENSUS":
       event = NewConsensusEvent(evtype, parse_ns_body(data), data)
     elif evtype == "BUILDTIMEOUT_SET":
-      m = re.match(
-        r"(\S+)\sTOTAL_TIMES=(\d+)\sTIMEOUT_MS=(\d+)\sXM=(\d+)\sALPHA=(\S+)\sCUTOFF_QUANTILE=(\S+)",
-        body)
-      set_type, total_times, timeout_ms, xm, alpha, quantile = m.groups()
-      event = BuildTimeoutSetEvent(evtype, set_type, int(total_times),
-                                   int(timeout_ms), int(xm), float(alpha),
-                                   float(quantile), body)
+      event = BuildTimeoutSetEvent(evtype, parse_ns_body(data), data)
     elif evtype == "GUARD":
       m = re.match(r"(\S+)\s(\S+)\s(\S+)", body)
       entry, guard, status = m.groups()
