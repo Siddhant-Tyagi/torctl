@@ -1465,36 +1465,30 @@ class EventHandler(EventSink):
     else:
       evtype,body = body,""
     evtype = evtype.upper()
-    positional_args, kw_args = self._decodeFields(body)
+    event_constructor = None
 
-    if evtype == "CIRC":
-      event = CircuitEvent(evtype, body, positional_args, kw_args)
-    elif evtype == "STREAM":
-      event = StreamEvent(evtype, body, positional_args, kw_args)
-    elif evtype == "ORCONN":
-      event = ORConnEvent(evtype, body, positional_args, kw_args)
-    elif evtype == "STREAM_BW":
-      event = StreamBwEvent(evtype, body, positional_args, kw_args)
-    elif evtype == "BW":
-      event = BWEvent(evtype, body, positional_args, kw_args)
-    elif evtype in ("DEBUG", "INFO", "NOTICE", "WARN", "ERR"):
-      event = LogEvent(evtype, body, positional_args, kw_args)
-    elif evtype == "NEWDESC":
-      event = NewDescEvent(evtype, body, positional_args, kw_args)
-    elif evtype == "ADDRMAP":
-      event = AddrMapEvent(evtype, body, positional_args, kw_args)
+    if evtype == "CIRC": event_constructor = CircuitEvent
+    elif evtype == "STREAM": event_constructor = StreamEvent
+    elif evtype == "ORCONN": event_constructor = ORConnEvent
+    elif evtype == "STREAM_BW": event_constructor = StreamBwEvent
+    elif evtype == "BW": event_constructor = BWEvent
+    elif evtype in ("DEBUG", "INFO", "NOTICE", "WARN", "ERR"): event_constructor = LogEvent
+    elif evtype == "NEWDESC": event_constructor = NewDescEvent
+    elif evtype == "ADDRMAP": event_constructor = AddrMapEvent
+    elif evtype == "BUILDTIMEOUT_SET": event_constructor = BuildTimeoutSetEvent
+    elif evtype == "GUARD": event_constructor = GuardEvent
     elif evtype == "NS":
       event = NetworkStatusEvent(evtype, parse_ns_body(data), data)
     elif evtype == "NEWCONSENSUS":
       event = NewConsensusEvent(evtype, parse_ns_body(data), data)
-    elif evtype == "BUILDTIMEOUT_SET":
-      event = BuildTimeoutSetEvent(evtype, parse_ns_body(data), data)
-    elif evtype == "GUARD":
-      event = GuardEvent(evtype, body, positional_args, kw_args)
     elif evtype == "TORCTL_TIMER":
       event = TimerEvent(evtype, data)
     else:
       event = UnknownEvent(evtype, body)
+
+    if event_constructor:
+      positional_args, kw_args = self._decodeFields(body)
+      event = event_constructor(evtype, body, positional_args, kw_args)
 
     return event
 
