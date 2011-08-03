@@ -227,9 +227,13 @@ class BuildTimeoutSetEvent(Event):
       self.close_rate = int(self.close_rate)
 
 class CircuitEvent(Event):
+  # TODO: Add the following keyword argument:
+  # "BUILD_FLAGS": "build_flags"
+  # after https://trac.torproject.org/projects/tor/ticket/2411 is completed
+  # (on first glance looks like this will be a comma separated list)
+
   _POSITIONAL_ARGS = ("circ_id", "status", "path")
   _KEYWORD_ARGS = {
-    "BUILD_FLAGS": "build_flags",
     "PURPOSE": "purpose",
     "REASON": "reason",
     "REMOTE_REASON": "remote_reason"
