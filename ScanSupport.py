@@ -150,9 +150,16 @@ class ScanHandler(PathSupport.PathBuilder):
     return cond._rank
 
   def get_exit_node(self):
-    ret = copy.copy(self.last_exit) # GIL FTW
-    if ret:
+    #ret = copy.copy(self.last_exit) # GIL FTW
+    # doesn't this mean TorCtl.py will reach refcount 0 too soon and delete the router
+    # from consensus?
+    ret = self.last_exit
+
+    if ret and not ret.deleted:
       plog("DEBUG", "Got last exit of "+ret.idhex)
+    elif ret and ret.deleted:
+      plog("WARN", "Got deleted last exit of"+ret.idhex)
+      return None
     else:
       plog("DEBUG", "No last exit.")
     return ret
