@@ -244,7 +244,7 @@ class CircuitEvent(Event):
     self.circ_id = int(self.circ_id)
 
     if self.path:
-      self.path = [p.replace("~", "=").split("=")[0] for p in self.path.split(",")]
+      self.path = [p.replace("~", "=").split("=")[0] for p in self.path.strip().split(",")]
     else: self.path = []
 
 class StreamEvent(Event):
