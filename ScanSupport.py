@@ -151,8 +151,12 @@ class ScanHandler(PathSupport.PathBuilder):
 
   def get_exit_node(self):
     ret = copy.copy(self.last_exit) # GIL FTW
-    if ret:
+
+    if ret and not ret.deleted:
       plog("DEBUG", "Got last exit of "+ret.idhex)
+    elif ret and ret.deleted:
+      plog("WARN", "Got deleted last exit of "+ret.idhex)
+      return None
     else:
       plog("DEBUG", "No last exit.")
     return ret
